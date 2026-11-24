@@ -1,3 +1,5 @@
+# Non Ai Dev Note
+I've said this many times on the repo, but if y'all got any good changes, please submit them, my coding ambitions are higher than my skill so atleast right now my stuff is very vibecoded
 # ALEKS A11y Bridge
 
 A Tampermonkey userscript that makes [ALEKS](https://www.aleks.com) math problems

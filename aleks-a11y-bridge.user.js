@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALEKS A11y Bridge — Parseable & Interactive DOM for Browser Agents
 // @namespace    aleks-a11y-bridge
-// @version      0.4.0
+// @version      0.4.3
 // @description  Makes ALEKS parseable and interactive: promotes div/span palette buttons and math inputs to real ARIA roles, mirrors canvas-drawn math into text, and bridges automated clicks/typing into ALEKS's low-level pointer/mouse/key event pipeline. Runs in every frame.
 // @match        https://*.aleks.com/*
 // @match        http://*.aleks.com/*
@@ -49,7 +49,7 @@
   /* ------------------------------------------------------------------ */
   /* CONFIG — tune live via ALEKSA11Y.config                            */
   /* ------------------------------------------------------------------ */
-  const SCRIPT_VERSION = '0.4.0';
+  const SCRIPT_VERSION = '0.4.3';
   const cfg = {
     debounceMs: 90,            // MutationObserver batch delay
     canvasFlushMs: 250,        // debounce between last canvas draw and text extraction
@@ -1204,6 +1204,11 @@
       .replace(/\\sp;/g, ' ')
       .replace(/\\dot;|\\smalldot;|\\times;/g, '*')
       .replace(/\\sqrt;/g, 'sqrt(')
+      .replace(/\\setunion;/g, '∪')
+      .replace(/\\abs;/g, '|')
+      .replace(/\\lessequal;/g, '≤')
+      .replace(/\\greaterequal;/g, '≥')
+      .replace(/\\nroot;/g, 'nroot(')
       .replace(/\\editbox;|\\readonly;/g, '')
       .replace(/\\[a-zA-Z]+;/g, '')
       .replace(/\(\d/g, '(')
@@ -1257,6 +1262,13 @@
     s = s.replace(/∪/g, '{UNION}');
     s = s.replace(/\\cup\b/gi, '{UNION}');
     s = s.replace(/\\infty\b/gi, '{INF}');
+    s = s.replace(/(?<![A-Za-z])pi(?![A-Za-z])|π/gi, '{PI}');
+    s = s.replace(/(?<![A-Za-z])theta(?![A-Za-z])|θ/gi, '{THETA}');
+    s = s.replace(/degree(?![A-Za-z])|°/gi, '{DEGREE}');
+    s = s.replace(/≤/g, '{LE}');
+    s = s.replace(/≥/g, '{GE}');
+    s = s.replace(/\bleq\b|\ble\b/gi, '{LE}');
+    s = s.replace(/\bgeq\b|\bge\b/gi, '{GE}');
     return s;
   }
 
@@ -1269,8 +1281,17 @@
       for (const ch of text.slice(last, m.index)) feedChar(ie, ch);
       const name = m[1].trim().toUpperCase();
       if (name === 'INF') { try { ie.actionOnSingleton('infinity'); } catch (e) {} }
-      else if (name === 'NEGINF') { try { ie.actionOnSingleton('neginfinity'); } catch (e) {} }
-      else if (name === 'UNION') { try { ie.actionOnSingleton('union'); } catch (e) {} }
+      else if (name === 'NEGINF') { feedChar(ie, '-'); try { ie.actionOnSingleton('infinity'); } catch (e) {} }
+      else if (name === 'UNION') { try { ie.actionOnBinary('setunion'); } catch (e) { try { ie.actionOnSingleton('union'); } catch (e2) {} } }
+      else if (name === 'PI') { try { ie.actionOnSingleton('pi'); } catch (e) {} }
+      else if (name === 'THETA') { try { ie.actionOnSingleton('theta'); } catch (e) {} }
+      else if (name === 'DEGREE') { try { ie.actionOnSingleton('degree'); } catch (e) {} }
+      else if (name === 'LE') { try { ie.actionOnBinary('lessequal'); } catch (e) {} }
+      else if (name === 'GE') { try { ie.actionOnBinary('greaterequal'); } catch (e) {} }
+      else if (name === 'SQRT') { try { ie.actionOnUnary('sqrt'); } catch (e) {} }
+      else if (name === 'ABS') { try { ie.actionOnUnary('abs'); } catch (e) {} }
+      else if (name === 'FRAC') { try { ie.actionOnFrac(); } catch (e) {} }
+      else if (name === 'NROOT') { try { ie.actionOnOperator('nroot'); } catch (e) {} }
       else if (SPECIAL_KEY_CODES[name] !== undefined) {
         try { ie.actionOnSpecialKey({ eventKeyCode: SPECIAL_KEY_CODES[name], eventShiftKey: false, eventCharacter: '' }); } catch (e) {}
       }
@@ -1414,7 +1435,7 @@
             beforeCmp = before;
             typedNorm = text;
           }
-          const norm = s => String(s || '').replace(/\s+/g, '').replace(/[−–—]/g, '-').replace(/[·⋅]/g, '*').replace(/;/g, ',').replace(/∞/g, 'inf').replace(/∪/g, 'U');
+          const norm = s => String(s || '').replace(/\s+/g, '').replace(/[−–—]/g, '-').replace(/[·⋅]/g, '*').replace(/;/g, ',').replace(/∞/g, 'inf').replace(/∪/g, 'U').replace(/≤/g, '<=').replace(/≥/g, '>=');
           const tn = norm(typedNorm);
           const verified = !!tn && norm(after) !== norm(beforeCmp) && norm(after).indexOf(tn) !== -1;
           lastVerify.method = method;
@@ -1868,6 +1889,7 @@
       '  ALEKSA11Y.type("\\frac{1}{2}", {latex:true}) -> experimental LaTeX shortcut mode',
       '  Tokens in type(): {BACKSPACE} {ENTER} {LEFT} {RIGHT} {TAB} {DELETE} — e.g. "-4x^2{RIGHT}+5"',
       '  Interval shorthand: "inf"/"-inf" -> ∞/−∞ and "∪" -> union (e.g. "(-inf,0)∪(0,inf)")',
+      '  Symbols: "pi" -> π, "theta" -> θ, "≤"/"le" -> ≤, "≥"/"ge" -> ≥, {SQRT}...{RIGHT} -> √, {ABS}...{RIGHT} -> |…|, {FRAC} -> empty fraction, {NROOT} -> nth root',
       '  ALEKSA11Y.key("Enter")        -> dispatch keydown/keypress/keyup at current focus',
       '  ALEKSA11Y.verify()            -> result of the last type(): {method, verified, before, after}',
       '  ALEKSA11Y.editorFor(target)    -> check the direct-editor API resolved for an input',
